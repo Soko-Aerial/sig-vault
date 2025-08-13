@@ -2,7 +2,7 @@ import types
 import pytest
 from typing import cast
 
-from services.smb import client
+from src.services.smb import client
 
 
 class DummyConnection:

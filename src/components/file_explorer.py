@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QHBoxLayout,
 )
-from services.smb.client import (
+from src.services.smb.client import (
     connect_to_smb_share,
     list_files_in_directory,
     download_file,

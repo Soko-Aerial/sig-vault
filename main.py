@@ -5,8 +5,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
 )
-from components.file_explorer import FileExplorer
-from components.connection_form import ConnectionForm
+from src.components.file_explorer import FileExplorer
+from src.components.connection_form import ConnectionForm
 
 
 class MainWindow(QMainWindow):

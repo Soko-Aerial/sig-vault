@@ -1,13 +1,13 @@
 import json
 from typing import Dict
 
-from components.connection_form import ConnectionForm
+from src.components.connection_form import ConnectionForm
 
 
 def test_connection_form_load_config(monkeypatch, qtbot, tmp_path):
     # Redirect CONFIG_PATH
     cfg = tmp_path / "config.json"
-    monkeypatch.setattr("components.connection_form.CONFIG_PATH", str(cfg))
+    monkeypatch.setattr("src.components.connection_form.CONFIG_PATH", str(cfg))
 
     data = {"server": "srv", "share": "share", "username": "user", "password": "pass"}
     cfg.write_text(json.dumps(data))
@@ -24,7 +24,7 @@ def test_connection_form_load_config(monkeypatch, qtbot, tmp_path):
 
 def test_connection_form_on_connect_and_save(monkeypatch, qtbot, tmp_path):
     cfg = tmp_path / "config_saved.json"
-    monkeypatch.setattr("components.connection_form.CONFIG_PATH", str(cfg))
+    monkeypatch.setattr("src.components.connection_form.CONFIG_PATH", str(cfg))
 
     captured: Dict[str, str] = {}
     form = ConnectionForm(lambda info: captured.update(info))
@@ -45,7 +45,7 @@ def test_connection_form_on_connect_and_save(monkeypatch, qtbot, tmp_path):
 
 def test_connection_form_missing_config(monkeypatch, qtbot, tmp_path):
     cfg = tmp_path / "does_not_exist.json"
-    monkeypatch.setattr("components.connection_form.CONFIG_PATH", str(cfg))
+    monkeypatch.setattr("src.components.connection_form.CONFIG_PATH", str(cfg))
 
     form = ConnectionForm(lambda _: None)
     qtbot.addWidget(form)

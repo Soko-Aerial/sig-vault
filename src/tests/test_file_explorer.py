@@ -1,7 +1,7 @@
 from typing import Dict, Any
 from pathlib import Path
 
-from components.file_explorer import FileExplorer
+from src.components.file_explorer import FileExplorer
 
 # Pytest-qt provides qtbot fixture
 
@@ -17,10 +17,10 @@ def test_file_explorer_loads_files(monkeypatch, qtbot):
     ]
 
     monkeypatch.setattr(
-        "components.file_explorer.connect_to_smb_share", lambda **k: object()
+        "src.components.file_explorer.connect_to_smb_share", lambda **k: object()
     )
     monkeypatch.setattr(
-        "components.file_explorer.list_files_in_directory", lambda root: items
+        "src.components.file_explorer.list_files_in_directory", lambda root: items
     )
 
     fe = FileExplorer(_session_info())
@@ -42,9 +42,9 @@ def test_file_explorer_load_failure(monkeypatch, qtbot):
         called["msg"] = text
 
     monkeypatch.setattr(
-        "components.file_explorer.connect_to_smb_share", failing_connect
+        "src.components.file_explorer.connect_to_smb_share", failing_connect
     )
-    monkeypatch.setattr("components.file_explorer.QMessageBox.critical", fake_critical)
+    monkeypatch.setattr("src.components.file_explorer.QMessageBox.critical", fake_critical)
 
     fe = FileExplorer(_session_info())
     qtbot.addWidget(fe)
@@ -57,10 +57,10 @@ def test_file_explorer_load_failure(monkeypatch, qtbot):
 def test_file_explorer_download(monkeypatch, qtbot, tmp_path):
     items = [{"name": "file1.txt", "path": "file1.txt", "size": "5", "is_dir": "false"}]
     monkeypatch.setattr(
-        "components.file_explorer.connect_to_smb_share", lambda **k: object()
+        "src.components.file_explorer.connect_to_smb_share", lambda **k: object()
     )
     monkeypatch.setattr(
-        "components.file_explorer.list_files_in_directory", lambda root: items
+        "src.components.file_explorer.list_files_in_directory", lambda root: items
     )
 
     saved: Dict[str, Any] = {}
@@ -75,11 +75,11 @@ def test_file_explorer_download(monkeypatch, qtbot, tmp_path):
         Path(local).write_text("dummy")
 
     monkeypatch.setattr(
-        "components.file_explorer.QFileDialog.getSaveFileName", fake_get_save_file_name
+        "src.components.file_explorer.QFileDialog.getSaveFileName", fake_get_save_file_name
     )
-    monkeypatch.setattr("components.file_explorer.download_file", fake_download)
+    monkeypatch.setattr("src.components.file_explorer.download_file", fake_download)
     monkeypatch.setattr(
-        "components.file_explorer.QMessageBox.information", lambda *a, **k: None
+        "src.components.file_explorer.QMessageBox.information", lambda *a, **k: None
     )
 
     fe = FileExplorer(_session_info())
@@ -101,7 +101,7 @@ def test_file_explorer_upload(monkeypatch, qtbot, tmp_path):
     ]
 
     monkeypatch.setattr(
-        "components.file_explorer.connect_to_smb_share", lambda **k: object()
+        "src.components.file_explorer.connect_to_smb_share", lambda **k: object()
     )
 
     # list_files_in_directory will be called twice: first returns initial list, after upload returns extended list
@@ -111,7 +111,7 @@ def test_file_explorer_upload(monkeypatch, qtbot, tmp_path):
         call["n"] += 1
         return items_initial if call["n"] == 1 else items_after
 
-    monkeypatch.setattr("components.file_explorer.list_files_in_directory", list_files)
+    monkeypatch.setattr("src.components.file_explorer.list_files_in_directory", list_files)
 
     def fake_get_open_file_name(parent, title):  # noqa: ARG001
         f = tmp_path / "upload.bin"
@@ -124,11 +124,11 @@ def test_file_explorer_upload(monkeypatch, qtbot, tmp_path):
         uploaded["path"] = path
 
     monkeypatch.setattr(
-        "components.file_explorer.QFileDialog.getOpenFileName", fake_get_open_file_name
+        "src.components.file_explorer.QFileDialog.getOpenFileName", fake_get_open_file_name
     )
-    monkeypatch.setattr("components.file_explorer.upload_file", fake_upload)
+    monkeypatch.setattr("src.components.file_explorer.upload_file", fake_upload)
     monkeypatch.setattr(
-        "components.file_explorer.QMessageBox.information", lambda *a, **k: None
+        "src.components.file_explorer.QMessageBox.information", lambda *a, **k: None
     )
 
     fe = FileExplorer(_session_info())
