@@ -5,10 +5,20 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "pyside6>=6.9.1",
     "smbprotocol>=1.15.0",
 ]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
     "ruff>=0.12.7",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
+addopts = "--cov=src --cov-report=html --cov-config=pyproject.toml --cov-fail-under=0 --cov-branch"
+
+[tool.coverage.run]
+omit = ["main.py"]

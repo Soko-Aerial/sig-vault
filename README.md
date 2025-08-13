@@ -17,3 +17,7 @@
 
 4. **Cloud Platform**
    - Integrates with a self-hosted Nextcloud instance
+
+## todo
+
+- [ ] get server and folder as args to the file

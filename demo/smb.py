@@ -1,5 +1,5 @@
+import uuid
 import pprint
-import uuid#
 from getpass import getpass
 from typing import List, Dict
 
@@ -17,7 +17,7 @@ from smbprotocol.connection import Connection
 from smbprotocol.file_info import FileInformationClass
 
 
-SERVER = "10.223.6.248"
+SERVER = "127.0.0.1"
 SHARE = "mock_nas"
 FOLDER = ""
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"}

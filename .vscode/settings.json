@@ -5,5 +5,10 @@
   "[python]": {
     "editor.tabSize": 4,
     "editor.insertSpaces": true
-  }
+},
+"python.testing.pytestArgs": [
+    "src"
+],
+"python.testing.unittestEnabled": false,
+"python.testing.pytestEnabled": true
 }
