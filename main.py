@@ -1,9 +1,9 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
+    QDockWidget,
     QMainWindow,
     QWidget,
-    QDockWidget,
 )
 from components.file_explorer import FileExplorer
 from components.connection_form import ConnectionForm

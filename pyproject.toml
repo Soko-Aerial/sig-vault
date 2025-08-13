@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "pyside6>=6.9.1",
+    "pytest>=8.4.1",
     "smbprotocol>=1.15.0",
 ]
 
