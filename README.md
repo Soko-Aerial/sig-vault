@@ -13,7 +13,7 @@
    - Upload selected images or videos from the local system to NAS or Nextcloud.
 
 3. **Media Download**
-   - Download videos to local memory for advanced processing and exploration within the SIGTrack platform (e.g., FMV, scaling, etc).
+   - Download videos to local memory for use within SIGTrack
 
 4. **Cloud Platform**
-   - Integrates with a self-hosted Nextcloud instance using WebDAV.
+   - Integrates with a self-hosted Nextcloud instance
