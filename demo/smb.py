@@ -1,8 +1,10 @@
 import uuid
 import pprint
+import argparse
 from getpass import getpass
-from typing import List, Dict
+from typing import List, Dict, Any, cast
 
+from smbprotocol.tree import TreeConnect
 from smbprotocol.open import (
     Open,
     CreateOptions,
@@ -12,14 +14,24 @@ from smbprotocol.open import (
     FileAttributes,
 )
 from smbprotocol.session import Session
-from smbprotocol.tree import TreeConnect
-from smbprotocol.connection import Connection
 from smbprotocol.file_info import FileInformationClass
+from smbprotocol.connection import Connection
 
 
-SERVER = "127.0.0.1"
-SHARE = "mock_nas"
-FOLDER = ""
+def parse_args():
+    parser = argparse.ArgumentParser(description="List media files from an SMB share.")
+    parser.add_argument(
+        "--server", required=True, help="SMB server address (e.g., 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--share", required=True, help="SMB share name (e.g., mock_nas)"
+    )
+    parser.add_argument(
+        "--folder", default="", help="Folder path inside the share (default: root)"
+    )
+    return parser.parse_args()
+
+
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
@@ -50,12 +62,13 @@ def is_media_file(filename: str) -> bool:
     return any(filename.lower().endswith(ext) for ext in IMAGE_EXTS | VIDEO_EXTS)
 
 
-def list_media_files_recursive(directory: Open, base_path: str = "") -> List[Dict]:
+def list_media_files_recursive(tree: TreeConnect, directory: Open, base_path: str = "") -> List[Dict]:
     """
     Recursively lists all media files (images and videos) in a given directory
     on an SMB share.
 
     Args:
+        tree (TreeConnect): The SMB tree connection used to open subdirectories.
         directory (Open): The directory to scan, represented as an SMB Open object.
         base_path (str): The path relative to the root of the SMB share, used for recursion.
 
@@ -75,19 +88,22 @@ def list_media_files_recursive(directory: Open, base_path: str = "") -> List[Dic
     for entry in directory.query_directory(
         "*", FileInformationClass.FILE_DIRECTORY_INFORMATION
     ):
-        fields = entry.fields
+        fields = cast(Any, entry).fields
         raw_name = fields["file_name"].value
-        name = decode_utf16le(raw_name)
+        name = decode_utf16le(raw_name) if raw_name else ""
         full_path = f"{base_path}\\{name}" if base_path else name
-        is_dir = bool(
-            fields["file_attributes"].value & FileAttributes.FILE_ATTRIBUTE_DIRECTORY
+        file_attributes = fields["file_attributes"].value
+        is_dir = (
+            bool(file_attributes & FileAttributes.FILE_ATTRIBUTE_DIRECTORY)
+            if file_attributes is not None
+            else False
         )
 
         if name in [".", ".."]:
             continue
 
         if is_dir:
-            subdir = Open(directory.tree, f"{directory.file_name}\\{name}")
+            subdir = Open(tree, f"{directory.file_name}\\{name}")
             subdir.create(
                 desired_access=0x00000001,
                 share_access=ShareAccess.FILE_SHARE_READ,
@@ -96,17 +112,25 @@ def list_media_files_recursive(directory: Open, base_path: str = "") -> List[Dic
                 impersonation_level=ImpersonationLevel.Impersonation,
                 file_attributes=FileAttributes.FILE_ATTRIBUTE_DIRECTORY,
             )
-            media_files.extend(list_media_files_recursive(subdir, full_path))
+            media_files.extend(list_media_files_recursive(tree, subdir, full_path))
             subdir.close()
         elif is_media_file(name):
             media_files.append(
                 {
                     "name": name,
                     "path": full_path,
-                    "created": fields["creation_time"].value,
-                    "last_access": fields["last_access_time"].value,
-                    "last_modified": fields["last_write_time"].value,
-                    "size_bytes": fields["end_of_file"].value,
+                    "created": fields["creation_time"].value
+                    if fields["creation_time"].value is not None
+                    else 0,
+                    "last_access": fields["last_access_time"].value
+                    if fields["last_access_time"].value is not None
+                    else 0,
+                    "last_modified": fields["last_write_time"].value
+                    if fields["last_write_time"].value is not None
+                    else 0,
+                    "size_bytes": fields["end_of_file"].value
+                    if fields["end_of_file"].value is not None
+                    else 0,
                     "is_video": name.lower().endswith(tuple(VIDEO_EXTS)),
                     "is_image": name.lower().endswith(tuple(IMAGE_EXTS)),
                 }
@@ -116,19 +140,20 @@ def list_media_files_recursive(directory: Open, base_path: str = "") -> List[Dic
 
 
 if __name__ == "__main__":
+    args = parse_args()
     username = input("Enter SMB username: ")
     password = getpass("Enter SMB password: ")
 
-    conn = Connection(guid=uuid.uuid4(), server_name=SERVER, port=445)
+    conn = Connection(guid=uuid.uuid4(), server_name=args.server, port=445)
     conn.connect()
 
     session = Session(conn, username=username, password=password)
     session.connect()
 
-    tree = TreeConnect(session, rf"\\{SERVER}\{SHARE}")
+    tree = TreeConnect(session, rf"\\{args.server}\{args.share}")
     tree.connect()
 
-    root_dir = Open(tree, FOLDER)
+    root_dir = Open(tree, args.folder)
     root_dir.create(
         desired_access=0x00000001,
         share_access=ShareAccess.FILE_SHARE_READ,
@@ -137,8 +162,7 @@ if __name__ == "__main__":
         impersonation_level=ImpersonationLevel.Impersonation,
         file_attributes=FileAttributes.FILE_ATTRIBUTE_DIRECTORY,
     )
-
-    media = list_media_files_recursive(root_dir)
+    media = list_media_files_recursive(tree, root_dir)
     root_dir.close()
 
     for m in media:
