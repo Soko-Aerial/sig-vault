@@ -1,21 +1,31 @@
+import base64
 import json
 from typing import Dict
-
 from src.components.connection_form import ConnectionForm
 
 
 def test_connection_form_load_config(monkeypatch, qtbot, tmp_path):
-    # Redirect CONFIG_PATH
-    cfg = tmp_path / "config.json"
-    monkeypatch.setattr("src.components.connection_form.CONFIG_PATH", str(cfg))
+    # Use a temp credentials.json as the single source of truth
+    creds = tmp_path / "credentials.json"
+    monkeypatch.setattr("src.components.connection_form.CREDENTIALS_PATH", str(creds))
 
-    data = {"server": "srv", "share": "share", "username": "user", "password": "pass"}
-    cfg.write_text(json.dumps(data))
+    data = {
+        "default_mode": "local",
+        "local": {
+            "server": "srv",
+            "share": "share",
+            "username": "user",
+            "password": "pass",
+        },
+        "cloud": {"base_url": "", "username": "", "password": ""},
+    }
+    creds.write_text(json.dumps(data))
 
     received: Dict[str, str] = {}
     form = ConnectionForm(lambda info: received.update(info))
     qtbot.addWidget(form)
 
+    # In Local mode, values from credentials.json populate fields
     assert form.server_input.text() == "srv"
     assert form.share_input.text() == "share"
     assert form.username_input.text() == "user"
@@ -23,13 +33,15 @@ def test_connection_form_load_config(monkeypatch, qtbot, tmp_path):
 
 
 def test_connection_form_on_connect_and_save(monkeypatch, qtbot, tmp_path):
-    cfg = tmp_path / "config_saved.json"
-    monkeypatch.setattr("src.components.connection_form.CONFIG_PATH", str(cfg))
+    creds = tmp_path / "credentials.json"
+    # Redirect unified credentials path
+    monkeypatch.setattr("src.components.connection_form.CREDENTIALS_PATH", str(creds))
 
     captured: Dict[str, str] = {}
     form = ConnectionForm(lambda info: captured.update(info))
     qtbot.addWidget(form)
 
+    # Stay in Local mode and fill form fields
     form.server_input.setText("a")
     form.share_input.setText("b")
     form.username_input.setText("c")
@@ -38,14 +50,27 @@ def test_connection_form_on_connect_and_save(monkeypatch, qtbot, tmp_path):
     form.on_connect()
 
     assert captured == {"server": "a", "share": "b", "username": "c", "password": "d"}
-    assert cfg.exists()
-    written = json.loads(cfg.read_text())
-    assert written == captured
+    # Credentials saved
+    assert creds.exists()
+    written = json.loads(creds.read_text())
+    assert written.get("default_mode") == "local"
+    loc = written.get("local", {})
+    assert loc.get("server") == "a"
+    assert loc.get("share") == "b"
+    assert loc.get("username") == "c"
+    # Password is stored prudently (base64 marker) and decodes back to original
+    pwd = loc.get("password", "")
+    if isinstance(pwd, str) and pwd.startswith("b64:"):
+        decoded = base64.b64decode(pwd[4:].encode("ascii")).decode("utf-8")
+    else:
+        decoded = pwd
+    assert decoded == "d"
 
 
 def test_connection_form_missing_config(monkeypatch, qtbot, tmp_path):
-    cfg = tmp_path / "does_not_exist.json"
-    monkeypatch.setattr("src.components.connection_form.CONFIG_PATH", str(cfg))
+    # Only credentials path is used; provide a non-existent file
+    creds = tmp_path / "credentials.json"
+    monkeypatch.setattr("src.components.connection_form.CREDENTIALS_PATH", str(creds))
 
     form = ConnectionForm(lambda _: None)
     qtbot.addWidget(form)

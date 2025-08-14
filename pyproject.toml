@@ -5,9 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "httpx>=0.28.1",
     "pyside6>=6.9.1",
     "pytest>=8.4.1",
+    "pytest-qt>=4.5.0",
     "smbprotocol>=1.15.0",
+    "webdavclient3>=3.14.6",
 ]
 
 [dependency-groups]
@@ -22,4 +25,4 @@ testpaths = ["src/tests"]
 addopts = "--cov=src --cov-report=html --cov-config=pyproject.toml --cov-fail-under=0 --cov-branch"
 
 [tool.coverage.run]
-omit = ["main.py"]
+omit = ["main.py", "src/tests/*"]

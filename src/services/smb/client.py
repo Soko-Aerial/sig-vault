@@ -1,7 +1,8 @@
 import uuid
 import logging
-from typing import List, Dict, Any, cast 
+from typing import List, Dict, Any, cast
 from pathlib import Path
+from datetime import datetime
 from smbprotocol.open import (
     Open,
     CreateOptions,
@@ -216,8 +217,37 @@ def list_files_in_directory(root: Open) -> List[Dict[str, str]]:
                                 is_dir = bool(attrs & 0x10)  # FILE_ATTRIBUTE_DIRECTORY
                             except Exception:
                                 is_dir = False
+                        # FILE_DIRECTORY_INFORMATION often includes FILE_LAST_WRITE_TIME
+                        # Available as 'last_write_time' or 'change_time' depending on lib
+                        modified_val = None
+                        for key in ("last_write_time", "change_time", "creation_time"):
+                            fld = fields.get(key)
+                            if fld is not None and hasattr(fld, "value"):
+                                try:
+                                    modified_val = getattr(fld, "value")
+                                    break
+                                except Exception:
+                                    modified_val = None
                 except Exception:
                     pass
+
+                # Convert modified_val to ISO-like string if present (best-effort)
+                mod_str: str | None = None
+                try:
+                    if modified_val is not None:
+                        # many libs return 100-ns intervals since Jan 1, 1601 (Windows FILETIME)
+                        # Detect large integers and convert to Unix epoch if needed.
+                        val = int(modified_val)
+                        # Heuristic: FILETIME ticks are very large numbers
+                        if val > 10_000_000_000_000:
+                            # Convert FILETIME (100-ns since 1601-01-01) to Unix seconds
+                            unix_seconds = (val - 116444736000000000) / 10_000_000
+                            dt = datetime.fromtimestamp(unix_seconds)
+                        else:
+                            dt = datetime.fromtimestamp(val)
+                        mod_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    mod_str = None
 
                 media.append(
                     {
@@ -225,6 +255,7 @@ def list_files_in_directory(root: Open) -> List[Dict[str, str]]:
                         "path": name,
                         "size": str(size_val),  # Keep as string for compatibility
                         "is_dir": "true" if is_dir else "false",
+                        "modified": mod_str or "",
                     }
                 )
             except Exception as e:

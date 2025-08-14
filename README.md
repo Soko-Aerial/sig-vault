@@ -17,3 +17,7 @@
 
 4. **Cloud Platform**
    - Integrates with a self-hosted Nextcloud instance
+
+## todo
+
+- [ ] use a class based architecture for the smb client
