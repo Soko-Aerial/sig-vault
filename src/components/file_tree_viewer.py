@@ -1,31 +1,29 @@
-from typing import Dict, Any, List
 import os
 import json
-from PySide6.QtCore import Qt
+from typing import Dict, Any, List
 from datetime import datetime
+from PySide6.QtCore import Qt, QObject, Signal, QThread
 from PySide6.QtWidgets import (
     QFileDialog,
-    QHBoxLayout,
     QLabel,
     QTreeWidget,
     QTreeWidgetItem,
     QMessageBox,
-    QPushButton,
     QHeaderView,
-    QProgressBar,
     QVBoxLayout,
     QWidget,
 )
-from src.services.storage_interface import download_file as _storage_download
 from src.services.storage_interface import get_backend as _get_backend
 from src.services.storage_interface import upload_file as _storage_upload
+from src.services.storage_interface import download_file as _storage_download
 
 # Backward-compatible shims for existing tests that monkeypatch these names
 _HANDLE_BACKENDS: dict[int, Any] = {}
 
 
-def connect_to_smb_share(**session_info):  # type: ignore[override]
-    # Storage selection expected in session_info; if absent, derive from credentials.json
+def connect_to_backend(**session_info):  # type: ignore[override]
+    # Storage selection expected in session_info; if absent,
+    # derive from credentials.json
     storage = (session_info.get("storage") or "").strip().lower()
     if not storage:
         try:
@@ -36,7 +34,8 @@ def connect_to_smb_share(**session_info):  # type: ignore[override]
             storage = "local"
         session_info = {**session_info, "storage": storage}
 
-    # If cloud and server is empty, load persisted base_url from credentials.json
+    # If cloud and server is empty,
+    # load persisted base_url from credentials.json
     if (session_info.get("storage") == "cloud") and not session_info.get("server"):
         try:
             with open(os.path.join(".sig", "credentials.json"), "r") as f:
@@ -74,15 +73,33 @@ def upload_file(session_info: dict, local_path: str) -> None:
     _storage_upload(session_info, local_path)
 
 
+class _LoaderWorker(QObject):
+    finished = Signal(object, list)
+    error = Signal(str)
+
+    def __init__(self, fetch_fn):
+        super().__init__()
+        self._fetch_fn = fetch_fn
+
+    def run(self):
+        try:
+            root, files = self._fetch_fn()
+            self.finished.emit(root, files)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
 class FileExplorer(QWidget):
-    def __init__(self, session_info: Dict[str, str]) -> None:
+    def __init__(self, session_info: Dict[str, str], async_load: bool = False) -> None:
         super().__init__()
         self.session_info = session_info
         self.selected_path: str | None = None
         # Keep the root handle so we can optionally query extra metadata (e.g., modified)
         self._root_handle: Any | None = None
-        # Loading state (no threads)
         self._loading: bool = False
+        self._use_async: bool = bool(async_load)
+        self._loader_thread: QThread | None = None
+        self._loader_worker: _LoaderWorker | None = None
         self.init_ui()
 
     def init_ui(self) -> None:
@@ -91,51 +108,31 @@ class FileExplorer(QWidget):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
 
-        self.top_bar = QHBoxLayout()
-        self.top_bar.setContentsMargins(0, 0, 0, 0)
-        self.top_bar.setSpacing(0)
-
-        self.path_label = QLabel(self._compute_path_label())
-        self.upload_btn = QPushButton("Upload File")
-        self.upload_btn.clicked.connect(self.upload_file)
-
-        self.top_bar.addWidget(self.path_label)
-        # Busy indicator for async loads
-        self.loading_bar = QProgressBar()
-        self.loading_bar.setRange(0, 0)  # indeterminate
-        self.loading_bar.setFixedHeight(16)
-        self.loading_bar.setTextVisible(False)
-        self.loading_bar.hide()
-        self.top_bar.addWidget(self.loading_bar)
-        self.top_bar.addWidget(self.upload_btn)
-        # self.top_bar.addWidget(self.download_btn)
-
         # Status label indicates whether there is data to display
         self.status_label = QLabel("Loading…")
-        self.status_label.setStyleSheet("color: #666;")
+        self.status_label.setStyleSheet("color: #aaa;")
 
         self.file_tree = QTreeWidget()
         self.file_tree.setHeaderLabels(["Name", "Size", "Type", "Date modified"])
         self.file_tree.setSortingEnabled(True)
+        # Rendering optimization for large lists
+        self.file_tree.setUniformRowHeights(True)
         # Remove any visual padding around and inside the tree items
         self.file_tree.setStyleSheet(
             "QTreeWidget { margin: 0; padding: 0; } QTreeWidget::item { padding: 4.5px; }"
         )
-        # Back-compat: some tests expect 'file_list' attribute
+        # Back-compat: some tests expect 'file_list' attribute (fix this)
         self.file_list = self.file_tree
 
         header = self.file_tree.header()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        # Name column: stretch
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        # Name column: back to interactive
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
 
         # QTreeWidget emits (item, column)
         self.file_tree.itemClicked.connect(self.on_item_selected)
 
-        self.main_layout.addLayout(self.top_bar)
+        # Only add the tree and status (top bar removed)
         self.main_layout.addWidget(self.file_tree)
         self.main_layout.addWidget(self.status_label)
         self.setLayout(self.main_layout)
@@ -144,13 +141,10 @@ class FileExplorer(QWidget):
 
     def _show_loading(self, on: bool) -> None:
         self._loading = on
-        self.loading_bar.setVisible(on)
-        self.upload_btn.setEnabled(not on)
         if on:
             self.status_label.setText("Loading…")
 
     def _update_status(self) -> None:
-        # Count items directly from QTreeWidget
         count = self.file_tree.topLevelItemCount()
         if count == 0:
             self.status_label.setText("No files to display")
@@ -184,8 +178,111 @@ class FileExplorer(QWidget):
                     pass
             self.status_label.setText(f"{count} item{'' if count == 1 else 's'}")
 
+    def _fetch_files(self) -> tuple[Any, list[Dict[str, Any]]]:
+        """Connect and list files; no UI updates here.
+
+        Raises an exception on failures, mirroring the synchronous path.
+        """
+        s = self.session_info or {}
+        storage = (s.get("storage") or "local").strip().lower()
+        user = (s.get("username") or "").strip()
+        pwd = (s.get("password") or "").strip()
+        if not user or not pwd:
+            raise RuntimeError("Not connected")
+        if storage != "cloud":
+            if not (s.get("server") and s.get("share")):
+                raise RuntimeError("Not connected")
+        # Use the canonical connector; tests can monkeypatch this
+        root = connect_to_backend(**self.session_info)
+        files: list[Dict[str, Any]] = list_files_in_directory(root)
+        return root, files
+
+    def _handle_load_error(self, message: str) -> None:
+        # Provide additional guidance for common DAV auth errors
+        msg = message
+        if any(x in msg for x in ["401", "NotAuthenticated", "forbidden", "403"]):
+            msg += "\n\nTip: Double-check your cloud username, password, and base URL."
+        QMessageBox.critical(self, "Error", msg)
+        # Reflect failure in status label and clear any stale list content
+        self.file_tree.clear()
+        self.status_label.setText("Failed to load files")
+
+    def _cleanup_loader(self) -> None:
+        try:
+            if self._loader_worker is not None:
+                self._loader_worker.deleteLater()
+        except Exception:
+            pass
+        try:
+            if self._loader_thread is not None:
+                self._loader_thread.deleteLater()
+        except Exception:
+            pass
+        self._loader_worker = None
+        self._loader_thread = None
+        self._loading = False
+
+    def load_files_async(self) -> bool:
+        """Asynchronously fetch and populate files without blocking the UI."""
+        # Quick credentials check on UI thread to avoid spawning threads unnecessarily
+        s = self.session_info or {}
+        storage = (s.get("storage") or "local").strip().lower()
+        user = (s.get("username") or "").strip()
+        pwd = (s.get("password") or "").strip()
+        if not user or not pwd:
+            self.file_tree.clear()
+            self._update_status()
+            self.status_label.setText("Not connected")
+            return False
+        if storage != "cloud":
+            if not (s.get("server") and s.get("share")):
+                self.file_tree.clear()
+                self._update_status()
+                self.status_label.setText("Not connected")
+                return False
+
+        if self._loading:
+            return True
+
+        self._show_loading(True)
+        self._loading = True
+        # Setup worker thread
+        self._loader_thread = QThread(self)
+        self._loader_worker = _LoaderWorker(self._fetch_files)
+        self._loader_worker.moveToThread(self._loader_thread)
+
+        # Wire signals so slots run in the main thread (receiver is self, a QWidget/QObject)
+        self._loader_thread.started.connect(self._loader_worker.run)
+        self._loader_worker.finished.connect(self._on_load_finished)
+        self._loader_worker.error.connect(self._on_load_error)
+        # Ensure the worker thread exits after finishing or erroring
+        self._loader_worker.finished.connect(self._loader_thread.quit)
+        self._loader_worker.error.connect(self._loader_thread.quit)
+        # Clean up after thread has fully stopped
+        self._loader_thread.finished.connect(self._cleanup_loader)
+        self._loader_thread.start()
+        return True
+
+    def _on_load_finished(self, root, files):
+        try:
+            self._root_handle = root
+            self.file_tree.clear()
+            self._populate_files(files)
+        finally:
+            self._show_loading(False)
+
+    def _on_load_error(self, message: str):
+        try:
+            self._handle_load_error(message)
+        finally:
+            self._show_loading(False)
+
     def load_files(self) -> bool:
-        # Don't attempt to connect if credentials are obviously missing
+        # In async mode, delegate to background loader and return immediately
+        if self._use_async:
+            return self.load_files_async()
+
+        # Don't attempt to connect if credentials are missing
         try:
             s = self.session_info or {}
             storage = (s.get("storage") or "local").strip().lower()
@@ -198,34 +295,18 @@ class FileExplorer(QWidget):
                 self.status_label.setText("Not connected")
                 return False
             if storage != "cloud":
-                # For local, also require server and share
                 if not (s.get("server") and s.get("share")):
                     self.file_tree.clear()
                     self._update_status()
                     self.status_label.setText("Not connected")
                     return False
-
-            # Proceed synchronously
-            root = connect_to_smb_share(**self.session_info)
+            root, files = self._fetch_files()
             # Save handle for optional metadata lookups
             self._root_handle = root
-            files: list[Dict[str, Any]] = list_files_in_directory(root)
-
             self.file_tree.clear()
             self._populate_files(files)
-        except Exception as e:
-            message = str(e)
-            # Provide additional guidance for common DAV auth errors
-            if any(
-                x in message for x in ["401", "NotAuthenticated", "forbidden", "403"]
-            ):
-                message += (
-                    "\n\nTip: Double-check your cloud username, password, and base URL."
-                )
-            QMessageBox.critical(self, "Error", message)
-            # Reflect failure in status label and clear any stale list content
-            self.file_tree.clear()
-            self.status_label.setText("Failed to load files")
+        except Exception as e:  # noqa: BLE001
+            self._handle_load_error(str(e))
             return False
         return True
 
@@ -262,19 +343,11 @@ class FileExplorer(QWidget):
                 return ""
             return ""
 
-        # Try to get a DAV client's low-level info() if available (cloud mode)
-        dav_info = None
-        try:
-            if (
-                isinstance(self._root_handle, tuple)
-                and self.session_info.get("storage", "").strip().lower() == "cloud"
-            ):
-                root_client = self._root_handle[0]
-                low = getattr(root_client, "client", None)
-                if low is not None and callable(getattr(low, "info", None)):
-                    dav_info = low  # webdav3 client
-        except Exception:
-            dav_info = None
+        # Speed: batch insert and suspend sorting/updates during populate
+        prev_sort = self.file_tree.isSortingEnabled()
+        self.file_tree.setSortingEnabled(False)
+        self.file_tree.setUpdatesEnabled(False)
+        items_buf: list[QTreeWidgetItem] = []
 
         for f in files:
             size = f.get("size", "-")
@@ -289,20 +362,6 @@ class FileExplorer(QWidget):
                 or f.get("date_modified")
                 or f.get("updated_at")
             )
-            # If missing and DAV info available, try to fetch it (best-effort, non-fatal)
-            if not mod_raw and dav_info is not None and name:
-                try:
-                    info = dav_info.info(name)
-                    if isinstance(info, dict):
-                        mod_raw = (
-                            info.get("modified")
-                            or info.get("last_modified")
-                            or info.get("mtime")
-                            or info.get("updated_at")
-                            or info.get("date")
-                        )
-                except Exception:
-                    pass
             # Human-readable size
             if is_dir:
                 hr = ""
@@ -324,7 +383,14 @@ class FileExplorer(QWidget):
             item = QTreeWidgetItem([name, hr, ftype, mod_str])
             # Store raw metadata for later use on column 0
             item.setData(0, Qt.ItemDataRole.UserRole, f)
-            self.file_tree.addTopLevelItem(item)
+            items_buf.append(item)
+
+        if items_buf:
+            self.file_tree.addTopLevelItems(items_buf)
+
+        # Restore view settings
+        self.file_tree.setSortingEnabled(prev_sort)
+        self.file_tree.setUpdatesEnabled(True)
         self._update_status()
 
     def _compute_path_label(self) -> str:

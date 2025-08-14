@@ -17,7 +17,7 @@ def test_file_viewer_loads_files(monkeypatch, qtbot):
     ]
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_smb_share", lambda **k: object()
+        "src.components.file_tree_viewer.connect_to_backend", lambda **k: object()
     )
     monkeypatch.setattr(
         "src.components.file_tree_viewer.list_files_in_directory", lambda root: items
@@ -54,7 +54,7 @@ def test_file_viewer_load_failure(monkeypatch, qtbot):
         called["msg"] = text
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_smb_share", failing_connect
+        "src.components.file_tree_viewer.connect_to_backend", failing_connect
     )
     monkeypatch.setattr(
         "src.components.file_tree_viewer.QMessageBox.critical", fake_critical
@@ -77,7 +77,7 @@ def test_file_viewer_load_failure_dav_401(monkeypatch, qtbot):
 
     # Simulate connection succeeds but listing raises a friendly auth message
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_smb_share", lambda **k: object()
+        "src.components.file_tree_viewer.connect_to_backend", lambda **k: object()
     )
 
     def failing_list(root):  # noqa: ARG001
@@ -102,7 +102,7 @@ def test_file_viewer_load_failure_dav_401(monkeypatch, qtbot):
 def test_file_viewer_download(monkeypatch, qtbot, tmp_path):
     items = [{"name": "file1.txt", "path": "file1.txt", "size": "5", "is_dir": "false"}]
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_smb_share", lambda **k: object()
+        "src.components.file_tree_viewer.connect_to_backend", lambda **k: object()
     )
     monkeypatch.setattr(
         "src.components.file_tree_viewer.list_files_in_directory", lambda root: items
@@ -149,7 +149,7 @@ def test_file_viewer_upload(monkeypatch, qtbot, tmp_path):
     ]
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_smb_share", lambda **k: object()
+        "src.components.file_tree_viewer.connect_to_backend", lambda **k: object()
     )
 
     # list_files_in_directory will be called twice: first returns initial list, after upload returns extended list

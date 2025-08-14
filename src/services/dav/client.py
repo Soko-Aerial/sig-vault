@@ -1,6 +1,7 @@
 import os
 from typing import List, Dict, Any, cast
 from webdav3.client import Client
+import concurrent.futures
 
 
 class WebDAVError(Exception):
@@ -94,58 +95,87 @@ class OwnCloudWebDAVClient:
             else:
                 print(f"WebDAV list failed: {e}")
             self._raise_mapped("list directory", e)
-        results = []
+        # Build base results first (cheap)
+        results: List[Dict[str, Any]] = []
+        info_indices: Dict[str, int] = {}
         for name in entries:
             if name in ("", remote_dir.strip("/")):
                 continue
             full = remote_dir + name if not name.startswith(remote_dir) else name
             is_dir = full.endswith("/")
-            size = None
-            modified: Any = None
-            if not is_dir:
+            entry = {
+                "name": name.rstrip("/"),
+                "remote_path": full,
+                "is_dir": is_dir,
+                "size": None,
+                "modified": None,
+            }
+            # Track all items for an info() pass to enrich metadata
+            info_indices[full] = len(results)
+            results.append(entry)
+
+        # Optionally allow disabling directory metadata fetch via env var
+        fetch_dirs_env = os.getenv("SIG_WEB_DAV_INFO_DIRECTORIES", "1").strip()
+        include_dirs = fetch_dirs_env not in {"0", "false", "no"}
+
+        # Concurrently fetch info() for entries to enrich size/modified
+        if info_indices:
+            max_workers_env = os.getenv("SIG_WEB_DAV_INFO_WORKERS")
+            try:
+                max_workers = int(max_workers_env) if max_workers_env else 8
+            except Exception:
+                max_workers = 8
+            # Cap to avoid too many concurrent connections
+            max_workers = max(1, min(16, max_workers))
+
+            def _fetch(
+                path: str,
+            ) -> tuple[str, Dict[str, Any] | None, Exception | None]:
                 try:
-                    info = cast(Dict[str, Any], self.client.info(full))
-                    raw_size = info.get("size")
-                    if isinstance(raw_size, (int, str)):
-                        try:
-                            size = int(raw_size)
-                        except (TypeError, ValueError):
-                            size = None
-                    # extract modified if provided by server
-                    modified = (
-                        info.get("modified")
-                        or info.get("last_modified")
-                        or info.get("mtime")
-                        or info.get("updated_at")
-                        or info.get("date")
-                    )
-                except Exception as e:
-                    if self.logger:
-                        self.logger.warning(f"Could not get info for {full}: {e}")
-                    size = None
+                    info = cast(Dict[str, Any], self.client.info(path))
+                    return path, info, None
+                except Exception as e:  # noqa: BLE001
+                    return path, None, e
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+                # If directory metadata is disabled, filter to files only
+                paths = [
+                    p
+                    for p, idx in info_indices.items()
+                    if include_dirs or not results[idx]["is_dir"]
+                ]
+                futures = [ex.submit(_fetch, p) for p in paths]
+                for fut in concurrent.futures.as_completed(futures):
+                    path, info, err = fut.result()
+                    idx = info_indices.get(path)
+                    if idx is None:
+                        continue
+                    if err is not None:
+                        if self.logger:
+                            self.logger.warning(f"Could not get info for {path}: {err}")
+                        continue
+                    # Parse size and modified
+                    size_val: Any = None
+                    if not results[idx]["is_dir"]:
+                        raw_size = info.get("size") if isinstance(info, dict) else None
+                        if isinstance(raw_size, (int, str)):
+                            try:
+                                size_val = int(raw_size)
+                            except (TypeError, ValueError):
+                                size_val = None
                     modified = None
-            else:
-                # Try to retrieve folder modified time as well (best-effort)
-                try:
-                    info = cast(Dict[str, Any], self.client.info(full))
-                    modified = (
-                        info.get("modified")
-                        or info.get("last_modified")
-                        or info.get("mtime")
-                        or info.get("updated_at")
-                        or info.get("date")
-                    )
-                except Exception:
-                    modified = None
-            results.append(
-                {
-                    "name": name.rstrip("/"),
-                    "remote_path": full,
-                    "is_dir": is_dir,
-                    "size": size,
-                    "modified": modified,
-                }
-            )
+                    if isinstance(info, dict):
+                        modified = (
+                            info.get("modified")
+                            or info.get("last_modified")
+                            or info.get("mtime")
+                            or info.get("updated_at")
+                            or info.get("date")
+                        )
+                    # Only set size for files
+                    if not results[idx]["is_dir"]:
+                        results[idx]["size"] = size_val
+                    results[idx]["modified"] = modified
         return results
 
     def get_owncloud_capabilities(self) -> Dict[str, Any]:

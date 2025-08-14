@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
+import json
 from typing import Dict, Any
 
 from PySide6.QtWidgets import (
@@ -69,23 +69,8 @@ class Explorer(QWidget):
         self.top_bar.addWidget(self.config_btn)
 
         # --- File explorer ---
-        # We'll connect after loading saved settings.
-        self.explorer = FileExplorer(session_info={})
-        # Hide the explorer's own top bar to avoid duplicated location and upload controls
-        try:
-            top_bar = getattr(self.explorer, "top_bar", None)
-            if isinstance(top_bar, QHBoxLayout):
-                for i in range(top_bar.count()):
-                    w = top_bar.itemAt(i).widget()
-                    if w is not None:
-                        w.setVisible(False)
-                parent = top_bar.parent()
-                if isinstance(parent, QWidget):
-                    parent.setVisible(False)
-            elif top_bar is not None and hasattr(top_bar, "setVisible"):
-                top_bar.setVisible(False)
-        except Exception:
-            pass
+        # Use async loading to keep UI responsive when listing large directories
+        self.explorer = FileExplorer(session_info={}, async_load=True)
 
         # Wire the top Download button to explorer action and selection state
         try:
@@ -227,11 +212,16 @@ class Explorer(QWidget):
         return (self.storage_combo.currentText() or "").strip().lower()
 
     def _set_storage_combo(self, mode: str) -> None:
+        # Block signals to avoid triggering on_storage_changed when setting programmatically
         mode = (mode or "smb").strip().lower()
-        if mode in {"local nas drive", "smb", "local", "nas"}:
-            self.storage_combo.setCurrentIndex(0)
-        else:
-            self.storage_combo.setCurrentIndex(1)
+        try:
+            self.storage_combo.blockSignals(True)
+            if mode in {"local nas drive", "smb", "local", "nas"}:
+                self.storage_combo.setCurrentIndex(0)
+            else:
+                self.storage_combo.setCurrentIndex(1)
+        finally:
+            self.storage_combo.blockSignals(False)
 
     def _read_storage_selection(self) -> str:
         try:

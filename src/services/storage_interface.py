@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Protocol, Tuple
+from typing import Any, Dict, List, Protocol, Tuple, Union, cast
 
 
-StorageEntry = Dict[str, str]
+StorageEntry = Dict[str, Union[str, int, float]]
 
 
 class StorageBackend(Protocol):
@@ -35,7 +35,9 @@ def _smb_backend() -> StorageBackend:
             )
 
         def list_files(self, handle: Any) -> List[StorageEntry]:
-            return smb_list(handle)
+            # Underlying SMB returns List[Dict[str, str]], which is runtime-compatible
+            # with our StorageEntry but not covariant for typing. Cast for clarity.
+            return cast(List[StorageEntry], smb_list(handle))
 
         def download(
             self, session_info: Dict[str, str], remote: str, local: str
@@ -72,21 +74,26 @@ def _dav_backend() -> StorageBackend:
             try:
                 entries = client.list(path)
             except WebDAVAuthError as e:
-                # Surface a concise, user-friendly message upwards
                 raise RuntimeError(str(e)) from e
             result: List[StorageEntry] = []
             for e in entries:
                 name = str(e.get("name", ""))
                 size = e.get("size")
                 is_dir = bool(e.get("is_dir"))
-                result.append(
-                    {
-                        "name": name,
-                        "path": name,
-                        "size": str(size if size is not None else 0),
-                        "is_dir": "true" if is_dir else "false",
-                    }
-                )
+                out: StorageEntry = {
+                    "name": name,
+                    "path": name,
+                    "size": str(size if size is not None else 0),
+                    "is_dir": "true" if is_dir else "false",
+                }
+                # Include modified when available to populate UI "Date modified"
+                mod = e.get("modified")
+                if mod is not None:
+                    # Keep raw form; UI will format various types/strings
+                    out["modified"] = (
+                        str(mod) if not isinstance(mod, (int, float)) else mod
+                    )
+                result.append(out)
             return result
 
         def download(
