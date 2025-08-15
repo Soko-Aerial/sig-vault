@@ -2,7 +2,7 @@ import types
 import pytest
 from typing import cast
 
-from src.services.smb import client
+from vault.services.smb import client
 
 
 class DummyConnection:

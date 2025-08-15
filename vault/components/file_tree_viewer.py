@@ -17,9 +17,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from src.services.storage_interface import get_backend as _get_backend
-from src.services.storage_interface import upload_file as _storage_upload
-from src.services.storage_interface import download_file as _storage_download
+from vault.services.storage_interface import get_backend as _get_backend
+from vault.services.storage_interface import upload_file as _storage_upload
+from vault.services.storage_interface import download_file as _storage_download
 
 # Backward-compatible shims for existing tests that monkeypatch these names
 _HANDLE_BACKENDS: dict[int, Any] = {}

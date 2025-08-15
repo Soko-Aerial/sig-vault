@@ -1,6 +1,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget, QWidget
-from src.components.explorer import Explorer
+from vault.components.explorer import Explorer
 from PySide6.QtGui import QFont
 
 

@@ -1,13 +1,13 @@
 import base64
 import json
 from typing import Dict
-from src.components.connection_form import ConnectionForm
+from vault.components.connection_form import ConnectionForm
 
 
 def test_connection_form_load_config(monkeypatch, qtbot, tmp_path):
     # Use a temp credentials.json as the single source of truth
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.connection_form.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.connection_form.CREDENTIALS_PATH", str(creds))
 
     data = {
         "default_mode": "local",
@@ -35,7 +35,7 @@ def test_connection_form_load_config(monkeypatch, qtbot, tmp_path):
 def test_connection_form_on_connect_and_save(monkeypatch, qtbot, tmp_path):
     creds = tmp_path / "credentials.json"
     # Redirect unified credentials path
-    monkeypatch.setattr("src.components.connection_form.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.connection_form.CREDENTIALS_PATH", str(creds))
 
     captured: Dict[str, str] = {}
     form = ConnectionForm(lambda info: captured.update(info))
@@ -70,7 +70,7 @@ def test_connection_form_on_connect_and_save(monkeypatch, qtbot, tmp_path):
 def test_connection_form_missing_config(monkeypatch, qtbot, tmp_path):
     # Only credentials path is used; provide a non-existent file
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.connection_form.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.connection_form.CREDENTIALS_PATH", str(creds))
 
     form = ConnectionForm(lambda _: None)
     qtbot.addWidget(form)

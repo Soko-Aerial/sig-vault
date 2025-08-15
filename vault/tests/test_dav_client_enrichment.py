@@ -1,6 +1,6 @@
 from typing import Dict, Any
 
-from src.services.dav.client import OwnCloudWebDAVClient
+from vault.services.dav.client import OwnCloudWebDAVClient
 
 
 def test_list_enriches_file_and_dir_modified(monkeypatch):

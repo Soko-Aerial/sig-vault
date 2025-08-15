@@ -1,4 +1,4 @@
-from src.services.storage_interface import get_backend, download_file, upload_file
+from vault.services.storage_interface import get_backend, download_file, upload_file
 
 
 def test_smb_backend_wrappers(monkeypatch, tmp_path):
@@ -12,7 +12,7 @@ def test_smb_backend_wrappers(monkeypatch, tmp_path):
     }
 
     # Patch SMB client functions used by the backend
-    import src.services.smb.client as smb
+    import vault.services.smb.client as smb
 
     called = {"connect": False, "list": False, "download": False, "upload": False}
 
@@ -44,7 +44,7 @@ def test_smb_backend_wrappers(monkeypatch, tmp_path):
     download_file(sess, "r", str(out))
     assert called["download"] is True
 
-    src = tmp_path / "p.bin"
-    src.write_bytes(b"x")
-    upload_file(sess, str(src))
+    vault = tmp_path / "p.bin"
+    vault.write_bytes(b"x")
+    upload_file(sess, str(vault))
     assert called["upload"] is True

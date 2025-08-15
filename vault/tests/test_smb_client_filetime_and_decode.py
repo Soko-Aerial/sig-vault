@@ -1,5 +1,5 @@
 from typing import cast
-from src.services.smb.client import list_files_in_directory, Open
+from vault.services.smb.client import list_files_in_directory, Open
 
 
 class DummyEntry:

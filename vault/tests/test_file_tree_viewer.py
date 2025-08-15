@@ -1,7 +1,7 @@
 from typing import Dict, Any
 from pathlib import Path
 
-from src.components.file_tree_viewer import FileExplorer
+from vault.components.file_tree_viewer import FileExplorer
 
 # Pytest-qt provides qtbot fixture
 
@@ -17,10 +17,10 @@ def test_file_viewer_loads_files(monkeypatch, qtbot):
     ]
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_backend", lambda **k: object()
+        "vault.components.file_tree_viewer.connect_to_backend", lambda **k: object()
     )
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.list_files_in_directory", lambda root: items
+        "vault.components.file_tree_viewer.list_files_in_directory", lambda root: items
     )
 
     fe = FileExplorer(_session_info())
@@ -54,10 +54,10 @@ def test_file_viewer_load_failure(monkeypatch, qtbot):
         called["msg"] = text
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_backend", failing_connect
+        "vault.components.file_tree_viewer.connect_to_backend", failing_connect
     )
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.QMessageBox.critical", fake_critical
+        "vault.components.file_tree_viewer.QMessageBox.critical", fake_critical
     )
 
     fe = FileExplorer(_session_info())
@@ -77,7 +77,7 @@ def test_file_viewer_load_failure_dav_401(monkeypatch, qtbot):
 
     # Simulate connection succeeds but listing raises a friendly auth message
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_backend", lambda **k: object()
+        "vault.components.file_tree_viewer.connect_to_backend", lambda **k: object()
     )
 
     def failing_list(root):  # noqa: ARG001
@@ -86,10 +86,10 @@ def test_file_viewer_load_failure_dav_401(monkeypatch, qtbot):
         )
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.list_files_in_directory", failing_list
+        "vault.components.file_tree_viewer.list_files_in_directory", failing_list
     )
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.QMessageBox.critical", fake_critical
+        "vault.components.file_tree_viewer.QMessageBox.critical", fake_critical
     )
 
     fe = FileExplorer(_session_info())
@@ -102,10 +102,10 @@ def test_file_viewer_load_failure_dav_401(monkeypatch, qtbot):
 def test_file_viewer_download(monkeypatch, qtbot, tmp_path):
     items = [{"name": "file1.txt", "path": "file1.txt", "size": "5", "is_dir": "false"}]
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_backend", lambda **k: object()
+        "vault.components.file_tree_viewer.connect_to_backend", lambda **k: object()
     )
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.list_files_in_directory", lambda root: items
+        "vault.components.file_tree_viewer.list_files_in_directory", lambda root: items
     )
 
     saved: Dict[str, Any] = {}
@@ -120,12 +120,15 @@ def test_file_viewer_download(monkeypatch, qtbot, tmp_path):
         Path(local).write_text("dummy")
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.QFileDialog.getSaveFileName",
+        "vault.components.file_tree_viewer.QFileDialog.getSaveFileName",
         fake_get_save_file_name,
     )
-    monkeypatch.setattr("src.components.file_tree_viewer.download_file", fake_download)
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.QMessageBox.information", lambda *a, **k: None
+        "vault.components.file_tree_viewer.download_file", fake_download
+    )
+    monkeypatch.setattr(
+        "vault.components.file_tree_viewer.QMessageBox.information",
+        lambda *a, **k: None,
     )
 
     fe = FileExplorer(_session_info())
@@ -149,7 +152,7 @@ def test_file_viewer_upload(monkeypatch, qtbot, tmp_path):
     ]
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.connect_to_backend", lambda **k: object()
+        "vault.components.file_tree_viewer.connect_to_backend", lambda **k: object()
     )
 
     # list_files_in_directory will be called twice: first returns initial list, after upload returns extended list
@@ -160,7 +163,7 @@ def test_file_viewer_upload(monkeypatch, qtbot, tmp_path):
         return items_initial if call["n"] == 1 else items_after
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.list_files_in_directory", list_files
+        "vault.components.file_tree_viewer.list_files_in_directory", list_files
     )
 
     def fake_get_open_file_name(parent, title):  # noqa: ARG001
@@ -174,12 +177,13 @@ def test_file_viewer_upload(monkeypatch, qtbot, tmp_path):
         uploaded["path"] = path
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.QFileDialog.getOpenFileName",
+        "vault.components.file_tree_viewer.QFileDialog.getOpenFileName",
         fake_get_open_file_name,
     )
-    monkeypatch.setattr("src.components.file_tree_viewer.upload_file", fake_upload)
+    monkeypatch.setattr("vault.components.file_tree_viewer.upload_file", fake_upload)
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.QMessageBox.information", lambda *a, **k: None
+        "vault.components.file_tree_viewer.QMessageBox.information",
+        lambda *a, **k: None,
     )
 
     fe = FileExplorer(_session_info())

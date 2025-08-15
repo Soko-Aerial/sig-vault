@@ -21,8 +21,8 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["src/tests"]
-addopts = "--cov=src --cov-report=html --cov-config=pyproject.toml --cov-fail-under=0 --cov-branch"
+testpaths = ["vault/tests"]
+addopts = "--cov=vault --cov-report=html --cov-config=pyproject.toml --cov-fail-under=0 --cov-branch"
 
 [tool.coverage.run]
-omit = ["main.py", "src/tests/*"]
+omit = ["main.py", "vault/tests/*"]

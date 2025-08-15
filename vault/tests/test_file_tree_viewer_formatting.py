@@ -1,4 +1,4 @@
-from src.components.file_tree_viewer import FileExplorer
+from vault.components.file_tree_viewer import FileExplorer
 
 
 def test_format_modified_and_size(monkeypatch, qtbot):

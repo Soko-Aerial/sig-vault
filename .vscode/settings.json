@@ -7,7 +7,7 @@
     "editor.insertSpaces": true
 },
 "python.testing.pytestArgs": [
-    "src"
+    "vault"
 ],
 "python.testing.unittestEnabled": false,
 "python.testing.pytestEnabled": true

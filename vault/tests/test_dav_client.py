@@ -1,6 +1,6 @@
 import pytest
 
-from src.services.dav.client import (
+from vault.services.dav.client import (
     OwnCloudWebDAVClient,
     WebDAVAuthError,
     WebDAVNotFoundError,

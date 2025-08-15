@@ -17,7 +17,7 @@ class StorageBackend(Protocol):
 
 def _smb_backend() -> StorageBackend:
     # Lazy imports to keep optional deps optional
-    from src.services.smb.client import (
+    from vault.services.smb.client import (
         connect_to_smb_share as smb_connect,
         list_files_in_directory as smb_list,
         download_file as smb_download,
@@ -52,7 +52,7 @@ def _smb_backend() -> StorageBackend:
 
 def _dav_backend() -> StorageBackend:
     # Lazy import to avoid mandatory dependency when unused
-    from src.services.dav.client import OwnCloudWebDAVClient, WebDAVAuthError
+    from vault.services.dav.client import OwnCloudWebDAVClient, WebDAVAuthError
 
     class DAVBackend:
         def _client(self, session_info: Dict[str, str]) -> OwnCloudWebDAVClient:

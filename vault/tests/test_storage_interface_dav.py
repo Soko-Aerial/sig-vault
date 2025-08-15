@@ -2,12 +2,13 @@ import os
 import pytest
 from typing import Any, Dict, List, Union
 
-from src.services.storage_interface import (
+from vault.services.storage_interface import (
     connect as si_connect,
     download_file as si_download,
     upload_file as si_upload,
 )
-from src.services.dav.client import WebDAVAuthError
+from vault.services.dav.client import WebDAVAuthError
+
 
 class DummyOwnCloudClient:
     def __init__(self, base_url: str, username: str, password: str, *args, **kwargs):  # noqa: D401, ARG002
@@ -36,7 +37,7 @@ class DummyOwnCloudClient:
 
 def _patch_dummy_client(monkeypatch):
     # Ensure the lazy import inside storage_interface picks up our dummy
-    import src.services.dav.client as dav_mod
+    import vault.services.dav.client as dav_mod
 
     monkeypatch.setattr(dav_mod, "OwnCloudWebDAVClient", DummyOwnCloudClient)
     return dav_mod
@@ -77,7 +78,7 @@ def test_list_files_maps_fields_and_handles_auth_error(monkeypatch):
         {"name": "folder", "is_dir": True, "size": None},
     ]
 
-    from src.services.storage_interface import _dav_backend
+    from vault.services.storage_interface import _dav_backend
 
     backend = _dav_backend()  # type: ignore[call-arg]
     mapped = backend.list_files(handle)
@@ -111,9 +112,9 @@ def test_download_and_upload_delegate_to_client(monkeypatch, tmp_path):
     si_download(session, "remote/path.bin", str(local_target))
 
     # upload uses basename as remote
-    local_src = tmp_path / "payload.bin"
-    local_src.write_bytes(b"x")
-    si_upload(session, str(local_src))
+    local_vault = tmp_path / "payload.bin"
+    local_vault.write_bytes(b"x")
+    si_upload(session, str(local_vault))
 
     # Create a fresh client to inspect calls is tricky because si_* creates new instance
     # Instead, patch the constructor to return a shared instance to observe calls
@@ -133,14 +134,14 @@ def test_download_and_upload_delegate_to_client(monkeypatch, tmp_path):
         inst.upload = ul  # type: ignore[assignment]
         return inst
 
-    import src.services.dav.client as dav_mod
+    import vault.services.dav.client as dav_mod
 
     monkeypatch.setattr(dav_mod, "OwnCloudWebDAVClient", shared_ctor)
 
     # Invoke again to collect calls
     si_download(session, "remote/again.bin", str(local_target))
-    si_upload(session, str(local_src))
+    si_upload(session, str(local_vault))
 
     assert ("download", "remote/again.bin", str(local_target)) in calls
     # upload should use basename
-    assert calls[-1] == ("upload", str(local_src), os.path.basename(str(local_src)))
+    assert calls[-1] == ("upload", str(local_vault), os.path.basename(str(local_vault)))

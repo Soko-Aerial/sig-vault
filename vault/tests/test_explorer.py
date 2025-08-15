@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any
 
-from src.components.explorer import Explorer
+from vault.components.explorer import Explorer
 
 
 def _b64(s: str) -> str:
@@ -19,11 +19,11 @@ def test_init_with_missing_credentials_shows_not_connected(
 ):
     creds = tmp_path / "credentials.json"
     # Redirect credentials path used by Explorer
-    monkeypatch.setattr("src.components.explorer.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.explorer.CREDENTIALS_PATH", str(creds))
 
     # Avoid real backend work triggered by inner FileExplorer.load_files
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
+        "vault.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
     )
 
     w = Explorer()
@@ -36,7 +36,7 @@ def test_init_with_missing_credentials_shows_not_connected(
 
 def test_refresh_from_saved_local_and_cloud(monkeypatch, qtbot, tmp_path):
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.explorer.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.explorer.CREDENTIALS_PATH", str(creds))
 
     # Stub load_files so we can observe it being called on successful connect
     called: Dict[str, Any] = {"n": 0}
@@ -47,7 +47,7 @@ def test_refresh_from_saved_local_and_cloud(monkeypatch, qtbot, tmp_path):
         return True
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.FileExplorer.load_files", fake_load
+        "vault.components.file_tree_viewer.FileExplorer.load_files", fake_load
     )
 
     # 1) Local mode with complete creds
@@ -101,7 +101,7 @@ def test_refresh_from_saved_local_and_cloud(monkeypatch, qtbot, tmp_path):
 
 def test_storage_combo_change_persists(monkeypatch, qtbot, tmp_path):
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.explorer.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.explorer.CREDENTIALS_PATH", str(creds))
 
     make_creds_file(
         creds,
@@ -113,7 +113,7 @@ def test_storage_combo_change_persists(monkeypatch, qtbot, tmp_path):
     )
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
+        "vault.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
     )
 
     w = Explorer()
@@ -128,7 +128,7 @@ def test_storage_combo_change_persists(monkeypatch, qtbot, tmp_path):
 
 def test_local_missing_server_or_share_skips_connect(monkeypatch, qtbot, tmp_path):
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.explorer.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.explorer.CREDENTIALS_PATH", str(creds))
 
     # user/pass present but server/share missing
     make_creds_file(
@@ -153,7 +153,7 @@ def test_local_missing_server_or_share_skips_connect(monkeypatch, qtbot, tmp_pat
         return True
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.FileExplorer.load_files", fake_load
+        "vault.components.file_tree_viewer.FileExplorer.load_files", fake_load
     )
 
     w = Explorer()
@@ -166,7 +166,7 @@ def test_local_missing_server_or_share_skips_connect(monkeypatch, qtbot, tmp_pat
 
 def test_update_location_display_branches(monkeypatch, qtbot, tmp_path):
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.explorer.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.explorer.CREDENTIALS_PATH", str(creds))
     make_creds_file(
         creds,
         {
@@ -186,7 +186,7 @@ def test_update_location_display_branches(monkeypatch, qtbot, tmp_path):
     )
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
+        "vault.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
     )
 
     w = Explorer()
@@ -220,7 +220,7 @@ def test_update_location_display_branches(monkeypatch, qtbot, tmp_path):
 
 def test_config_dialog_connected_flow(monkeypatch, qtbot, tmp_path):
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.explorer.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.explorer.CREDENTIALS_PATH", str(creds))
     make_creds_file(
         creds,
         {
@@ -242,7 +242,7 @@ def test_config_dialog_connected_flow(monkeypatch, qtbot, tmp_path):
         return True
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.FileExplorer.load_files", fake_load
+        "vault.components.file_tree_viewer.FileExplorer.load_files", fake_load
     )
 
     # Replace ConnectionForm with a fake that immediately calls the callback
@@ -263,10 +263,10 @@ def test_config_dialog_connected_flow(monkeypatch, qtbot, tmp_path):
                 }
             )
 
-    monkeypatch.setattr("src.components.explorer.ConnectionForm", FakeForm)
+    monkeypatch.setattr("vault.components.explorer.ConnectionForm", FakeForm)
 
     # Ensure dialog.exec doesn't block
-    monkeypatch.setattr("src.components.explorer.QDialog.exec", lambda self: 0)
+    monkeypatch.setattr("vault.components.explorer.QDialog.exec", lambda self: 0)
 
     w = Explorer()
     qtbot.addWidget(w)
@@ -279,7 +279,7 @@ def test_config_dialog_connected_flow(monkeypatch, qtbot, tmp_path):
 
 def test_upload_button_and_selection_toggle(monkeypatch, qtbot, tmp_path):
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.explorer.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.explorer.CREDENTIALS_PATH", str(creds))
     make_creds_file(
         creds,
         {
@@ -306,7 +306,7 @@ def test_upload_button_and_selection_toggle(monkeypatch, qtbot, tmp_path):
 
     # Inject a dummy explorer instance after construction
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
+        "vault.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
     )
 
     w = Explorer()
@@ -324,7 +324,7 @@ def test_upload_button_and_selection_toggle(monkeypatch, qtbot, tmp_path):
 
 def test_helpers_and_persistence(monkeypatch, qtbot, tmp_path):
     creds = tmp_path / "credentials.json"
-    monkeypatch.setattr("src.components.explorer.CREDENTIALS_PATH", str(creds))
+    monkeypatch.setattr("vault.components.explorer.CREDENTIALS_PATH", str(creds))
 
     # Build sample creds with encoded passwords
     data = {
@@ -340,7 +340,7 @@ def test_helpers_and_persistence(monkeypatch, qtbot, tmp_path):
     make_creds_file(creds, data)
 
     monkeypatch.setattr(
-        "src.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
+        "vault.components.file_tree_viewer.FileExplorer.load_files", lambda self: True
     )
 
     w = Explorer()
