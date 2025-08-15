@@ -23,3 +23,4 @@
 - [ ] use a class based architecture for the smb client
 - [ ] fix showing . and .. in the file tree
 - [ ] use consistent status bar (not path)
+- [ ] put uploads and downloads on different threads from the UI
