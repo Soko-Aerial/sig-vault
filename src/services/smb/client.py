@@ -105,10 +105,6 @@ def download_file(session_info: dict, remote_path: str, local_path: str) -> None
 
 def upload_file(session_info: dict, local_path: str) -> None:
     tree, filename = _get_tree_and_path(session_info, Path(local_path).name)
-
-    with open(local_path, "rb") as f_in:
-        data = f_in.read()
-
     file = Open(
         tree,
         filename,
@@ -119,10 +115,19 @@ def upload_file(session_info: dict, local_path: str) -> None:
         desired_access=0x12019F,  # GENERIC_WRITE | FILE_WRITE_DATA | FILE_APPEND_DATA etc
         share_access=ShareAccess.FILE_SHARE_READ,
         impersonation_level=ImpersonationLevel.Impersonation,
-        file_attributes=FileAttributes.FILE_ATTRIBUTE_DIRECTORY,
+        file_attributes=FileAttributes.FILE_ATTRIBUTE_NORMAL,
     )
     try:
-        file.write(data, 0)
+        # Stream in chunks to avoid loading entire file into memory
+        chunk_size = 1024 * 1024  # 1 MiB
+        offset = 0
+        with open(local_path, "rb") as f_in:
+            while True:
+                data = f_in.read(chunk_size)
+                if not data:
+                    break
+                file.write(data, offset)
+                offset += len(data)
     finally:
         file.close()
 
@@ -201,6 +206,7 @@ def list_files_in_directory(root: Open) -> List[Dict[str, str]]:
                 # Attempt to extract size and directory attribute; fall back silently
                 size_val = 0
                 is_dir = False
+                modified_val = None
                 try:
                     if hasattr(entry_any, "fields"):
                         fields = entry_any.fields  # type: ignore[attr-defined]
@@ -219,7 +225,6 @@ def list_files_in_directory(root: Open) -> List[Dict[str, str]]:
                                 is_dir = False
                         # FILE_DIRECTORY_INFORMATION often includes FILE_LAST_WRITE_TIME
                         # Available as 'last_write_time' or 'change_time' depending on lib
-                        modified_val = None
                         for key in ("last_write_time", "change_time", "creation_time"):
                             fld = fields.get(key)
                             if fld is not None and hasattr(fld, "value"):

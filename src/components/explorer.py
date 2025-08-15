@@ -4,6 +4,8 @@ import os
 import json
 from typing import Dict, Any
 
+from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -15,12 +17,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt
 
-from .file_tree_viewer import FileExplorer
-from .connection_form import ConnectionForm
 from .icons import Icons
+from .connection_form import ConnectionForm
+from .file_tree_viewer import FileExplorer
 
 
 CREDENTIALS_PATH = ".sig/credentials.json"
@@ -50,6 +50,21 @@ class Explorer(QWidget):
         self.storage_combo.currentTextChanged.connect(self.on_storage_changed)
         self.top_bar.addWidget(self.storage_combo)
 
+        self.back_btn = QPushButton()
+        self._style_icon_button(self.back_btn, Icons.back, "Back")
+        self.back_btn.setEnabled(False)
+        self.top_bar.addWidget(self.back_btn)
+
+        self.forward_btn = QPushButton()
+        self._style_icon_button(self.forward_btn, Icons.forward, "Forward")
+        self.forward_btn.setEnabled(False)
+        self.top_bar.addWidget(self.forward_btn)
+
+        self.refresh_btn = QPushButton()
+        self._style_icon_button(self.refresh_btn, Icons.refresh, "Refresh")
+        self.top_bar.addWidget(self.refresh_btn)
+
+        # Path label (location)
         self.location_display = QLineEdit()
         self.location_display.setReadOnly(True)
         self.location_display.setPlaceholderText(
@@ -57,18 +72,11 @@ class Explorer(QWidget):
         )
         self.top_bar.addWidget(self.location_display, 1)
 
-        self.refresh_btn = QPushButton()
-        self._style_icon_button(self.refresh_btn, Icons.refresh, "Refresh")
-        self.top_bar.addWidget(self.refresh_btn)
-
+        # Upload / Download / Settings
         self.upload_btn = QPushButton()
         self._style_icon_button(self.upload_btn, Icons.upload, "Upload")
         self.top_bar.addWidget(self.upload_btn)
 
-        self.upload_btn.clicked.connect(self.on_upload_clicked)
-        self.refresh_btn.clicked.connect(self.on_refresh_clicked)
-
-        # New: top-level Download button (icon-only)
         self.download_btn = QPushButton()
         self._style_icon_button(self.download_btn, Icons.download, "Download")
         self.download_btn.setEnabled(False)
@@ -79,7 +87,12 @@ class Explorer(QWidget):
         self.config_btn.clicked.connect(self.open_config_dialog)
         self.top_bar.addWidget(self.config_btn)
 
+        # Click handlers
+        self.upload_btn.clicked.connect(self.on_upload_clicked)
+        self.refresh_btn.clicked.connect(self.on_refresh_clicked)
+
         # --- File explorer ---
+        # Always use async loading app-wide
         self.explorer = FileExplorer(session_info={}, async_load=True)
 
         # Wire the top Download button to explorer action and selection state
@@ -88,6 +101,21 @@ class Explorer(QWidget):
             self.explorer.file_list.itemSelectionChanged.connect(
                 self._on_selection_changed
             )
+            # Also listen for native fs selection changes if that view is enabled
+            try:
+                self.explorer.selection_changed.connect(
+                    lambda _p: self._on_selection_changed()
+                )
+            except Exception:
+                pass
+            # Navigation buttons and state
+            try:
+                self.back_btn.clicked.connect(self.explorer.go_back)
+                self.forward_btn.clicked.connect(self.explorer.go_forward)
+                self.explorer.nav_state_changed.connect(self._on_nav_state_changed)
+                self.explorer.path_changed.connect(self._on_path_changed)
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -101,6 +129,49 @@ class Explorer(QWidget):
         mode = self._read_storage_selection()
         self._set_storage_combo(mode)
         self.refresh_from_saved()
+
+    def _on_nav_state_changed(self, can_back: bool, can_forward: bool) -> None:
+        try:
+            is_cloud = (
+                self._session_info.get("storage") or "local"
+            ).strip().lower() == "cloud"
+            self.back_btn.setEnabled(is_cloud and bool(can_back))
+            self.forward_btn.setEnabled(is_cloud and bool(can_forward))
+            # Clear selection state for download when nav buttons change availability
+            # (this typically happens after a navigation completes)
+            self._on_selection_changed()
+        except Exception:
+            self.back_btn.setEnabled(False)
+            self.forward_btn.setEnabled(False)
+
+    def _on_path_changed(self, rel: str) -> None:
+        # Update location display to reflect current cloud path
+        try:
+            if (
+                self._session_info.get("storage") or "local"
+            ).strip().lower() != "cloud":
+                return
+            base_label = self._derive_cloud_path_from_base_url(
+                str(self._session_info.get("server", ""))
+            )
+            # base_label like 'user/' or ''
+            rel = (rel or "").strip().strip("/")
+            if not base_label:
+                # If base unknown, just show rel (root => '/')
+                self.location_display.setText(rel + ("/" if not rel else ""))
+                # Also ensure Download is disabled when nothing is selected
+                self._on_selection_changed()
+                return
+            if rel:
+                disp = (base_label.rstrip("/") + "/" + rel).strip("/")
+            else:
+                # Root: keep trailing slash like 'user/'
+                disp = base_label.rstrip("/") + "/"
+            self.location_display.setText(disp)
+            # Selection is cleared after nav; ensure Download button is disabled
+            self._on_selection_changed()
+        except Exception:
+            pass
 
     def _style_icon_button(self, btn: QPushButton, glyph: str, tooltip: str) -> None:
         """Apply Segoe MDL2 glyph text and make the button square."""
@@ -126,9 +197,20 @@ class Explorer(QWidget):
             QMessageBox.critical(self, "Upload", str(e))
 
     def on_refresh_clicked(self) -> None:
-        # Re-run the listing using the current session info.
-        # Avoid changing storage selection; simply reload.
+        # Refresh the current path being viewed.
         try:
+            is_cloud = (
+                self._session_info.get("storage") or "local"
+            ).strip().lower() == "cloud"
+            if is_cloud:
+                try:
+                    current = getattr(self.explorer, "_current_path", "")
+                    if isinstance(current, str):
+                        self.explorer._navigate_to(current, mode="reload")
+                        return
+                except Exception:
+                    pass
+            # Fallback: generic reload
             self._refresh_explorer()
         except Exception as e:
             QMessageBox.critical(self, "Refresh", str(e))
@@ -196,6 +278,7 @@ class Explorer(QWidget):
         pwd = (session.get("password") or "").strip()
         if not user or not pwd:
             self.location_display.clear()
+            self._on_nav_state_changed(False, False)
             # Keep explorer empty with a friendly status
             try:
                 self.explorer.file_list.clear()
@@ -214,6 +297,7 @@ class Explorer(QWidget):
                 except Exception:
                     pass
                 self._on_selection_changed()  # disable download
+                self._on_nav_state_changed(False, False)
                 return
         self._update_location_display()
         self._refresh_explorer()
@@ -244,6 +328,14 @@ class Explorer(QWidget):
 
         # Swap the explorer's session and reload
         self.explorer.session_info = self._session_info
+        # Use native QFileSystemModel by default for local browsing (non-cloud)
+        try:
+            use_native = (
+                self._session_info.get("storage", "local").strip().lower() != "cloud"
+            )
+            self.explorer.use_qfilesystem_model(use_native)
+        except Exception:
+            pass
         # Clear previous selection and list-state before reloading
         try:
             self.explorer.file_list.clear()
@@ -251,22 +343,93 @@ class Explorer(QWidget):
         except Exception:
             pass
         self._on_selection_changed()  # disables download
+        # Reset nav buttons until explorer reports new state
+        try:
+            is_cloud = (
+                self._session_info.get("storage") or "local"
+            ).strip().lower() == "cloud"
+            self._on_nav_state_changed(
+                False if not is_cloud else self.explorer.can_go_back(),
+                False if not is_cloud else self.explorer.can_go_forward(),
+            )
+        except Exception:
+            self._on_nav_state_changed(False, False)
         self.explorer.load_files()
 
     def _update_location_display(self) -> None:
-        # Always show the current folder path only.
-        # Root should appear as '/'. No usernames or base URLs.
-        path_label = "/"
+        # Show UNC for local and base URL for cloud to match UI expectations/tests
         try:
-            if getattr(self, "explorer", None) is not None and hasattr(
-                self.explorer, "_compute_path_label"
-            ):
-                path_label = str(self.explorer._compute_path_label())
-            else:
-                path_label = self._compute_path_label_from_session(self._session_info)
+            s = self._session_info or {}
+            mode = (s.get("storage") or "local").strip().lower()
+            if mode == "cloud":
+                # Show only the path for cloud, not the base URL.
+                # Prefer explicit current path from session; otherwise, derive from base URL
+                # such as .../remote.php/dav/files/<user>/ -> displays 'user/'.
+                label = self._compute_path_label_from_session(s)
+                if label and label != "/":
+                    # Strip leading slash and ensure trailing slash
+                    disp = label.lstrip("/")
+                    if disp and not disp.endswith("/"):
+                        disp += "/"
+                    self.location_display.setText(disp or "/")
+                    return
+                # Derive from server/base_url when no explicit path is present
+                base_url = str(s.get("server", ""))
+                derived = self._derive_cloud_path_from_base_url(base_url)
+                self.location_display.setText(derived or "/")
+                return
+            # Build a UNC path: \\server\share[\subpath]
+            server = (s.get("server") or "").strip().lstrip("\\")
+            share = (s.get("share") or "").strip().strip("\\/")
+            sub = (
+                s.get("current_path")
+                or s.get("path")
+                or s.get("cwd")
+                or s.get("dir")
+                or ""
+            )
+            sub = str(sub or "").replace("/", "\\").strip("\\")
+            base = f"\\\\{server}" if server else "\\\\"
+            unc = base + (f"\\{share}" if share else "")
+            if sub:
+                unc = unc + f"\\{sub}"
+            self.location_display.setText(unc if unc else "/")
         except Exception:
-            path_label = "/"
-        self.location_display.setText(path_label)
+            self.location_display.setText("/")
+
+    def _derive_cloud_path_from_base_url(self, url: str) -> str:
+        """Extract path portion after '/remote.php/dav/files/' from a WebDAV base URL.
+
+        Returns a normalized path without a leading slash, with a trailing slash if non-empty.
+        Example:
+            'https://host/remote.php/dav/files/user/' -> 'user/'
+            'https://host/remote.php/dav/files/user/sub' -> 'user/sub/'
+        """
+        try:
+            if not url:
+                return ""
+            marker = "/remote.php/dav/files/"
+            idx = url.find(marker)
+            if idx == -1:
+                return ""
+            rest = url[idx + len(marker) :]
+            # Stop at query or fragment if present
+            for sep in ("?", "#"):
+                j = rest.find(sep)
+                if j != -1:
+                    rest = rest[:j]
+            # Normalize slashes
+            rest = rest.strip().lstrip("/")
+            rest = rest.replace("\\", "/")
+            # If empty, no user/path segment available
+            if not rest:
+                return ""
+            # Ensure trailing slash for display consistency
+            if not rest.endswith("/"):
+                rest += "/"
+            return rest
+        except Exception:
+            return ""
 
     def _compute_path_label_from_session(self, sess: Dict[str, Any]) -> str:
         """Compute a display path from session info. Root => '/'."""
@@ -299,10 +462,20 @@ class Explorer(QWidget):
                     data = item.data(0, Qt.ItemDataRole.UserRole)
                 except Exception:
                     data = None
-                if isinstance(data, dict) and "path" in data:
-                    selected_path = data.get("path")
-                else:
-                    selected_path = item.text(0) or None
+                if isinstance(data, dict):
+                    # Prefer full_path for cloud items to include nested folders
+                    is_cloud = (
+                        self._session_info.get("storage") or "local"
+                    ).strip().lower() == "cloud"
+                    if is_cloud and data.get("full_path"):
+                        selected_path = str(data.get("full_path"))
+                    elif "path" in data:
+                        selected_path = data.get("path")
+                    else:
+                        selected_path = item.text(0) or None
+            # Fallback to explorer's selected_path if no QTreeWidget selection is available
+            if selected_path is None:
+                selected_path = getattr(self.explorer, "selected_path", None)
             # Sync with explorer's state
             try:
                 self.explorer.selected_path = selected_path
@@ -318,7 +491,7 @@ class Explorer(QWidget):
 
     def _set_storage_combo(self, mode: str) -> None:
         # Block signals to avoid triggering on_storage_changed when setting programmatically
-        mode = (mode or "smb").strip().lower()
+        mode = (mode or "local").strip().lower()
         try:
             self.storage_combo.blockSignals(True)
             if mode in {"local nas drive", "smb", "local", "nas"}:
@@ -376,7 +549,7 @@ class Explorer(QWidget):
                 return ""
         return s
 
-    def _build_session_from_saved(self) -> Dict[str, str]:
+    def _build_session_from_saved(self) -> Dict[str, Any]:
         mode = self._read_storage_selection()
         creds = self._read_all_credentials()
         if mode in {"local", "smb", "nas", "local nas drive"}:
@@ -387,6 +560,8 @@ class Explorer(QWidget):
                 "username": c.get("username", ""),
                 "password": self._dec_password(c.get("password", "")),
                 "storage": "local",
+                # Optional feature flag to use native QFileSystemModel for local browsing
+                "use_qfilesystem_model": bool(c.get("use_qfilesystem_model", False)),
             }
         else:
             c = creds.get("cloud", {})

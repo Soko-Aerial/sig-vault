@@ -36,8 +36,7 @@ class ConnectionForm(QWidget):
             self.try_auto_connect_on_startup()
         except Exception:
             # Never block UI on auto-connect issues
-            print("could not auto-connect")
-            pass
+            logger.debug("Auto-connect on startup skipped due to error", exc_info=True)
 
     def init_ui(self) -> None:
         self.server_input = QLineEdit()

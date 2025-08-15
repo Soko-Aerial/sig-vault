@@ -46,7 +46,9 @@ def test_refresh_from_saved_local_and_cloud(monkeypatch, qtbot, tmp_path):
         # Pretend we loaded some items
         return True
 
-    monkeypatch.setattr("src.components.file_tree_viewer.FileExplorer.load_files", fake_load)
+    monkeypatch.setattr(
+        "src.components.file_tree_viewer.FileExplorer.load_files", fake_load
+    )
 
     # 1) Local mode with complete creds
     make_creds_file(
@@ -92,7 +94,8 @@ def test_refresh_from_saved_local_and_cloud(monkeypatch, qtbot, tmp_path):
     # Sync the storage combo to the latest saved mode and reload
     w._set_storage_combo(w._read_storage_selection())
     w.refresh_from_saved()
-    assert w.location_display.text() == "https://example.com/remote.php/dav/files/user/"
+    # Cloud shows only the path derived from the base URL when no explicit path is set
+    assert w.location_display.text() == "user/"
     assert called["n"] >= 2
 
 
@@ -149,7 +152,9 @@ def test_local_missing_server_or_share_skips_connect(monkeypatch, qtbot, tmp_pat
         called["n"] += 1
         return True
 
-    monkeypatch.setattr("src.components.file_tree_viewer.FileExplorer.load_files", fake_load)
+    monkeypatch.setattr(
+        "src.components.file_tree_viewer.FileExplorer.load_files", fake_load
+    )
 
     w = Explorer()
     qtbot.addWidget(w)
@@ -209,7 +214,8 @@ def test_update_location_display_branches(monkeypatch, qtbot, tmp_path):
     }
     w._set_storage_combo("cloud")
     w._update_location_display()
-    assert w.location_display.text() == "https://oc/"
+    # Cloud shows root path when base URL has no user/path segment
+    assert w.location_display.text() == "/"
 
 
 def test_config_dialog_connected_flow(monkeypatch, qtbot, tmp_path):
@@ -235,7 +241,9 @@ def test_config_dialog_connected_flow(monkeypatch, qtbot, tmp_path):
         called["loaded"] = True
         return True
 
-    monkeypatch.setattr("src.components.file_tree_viewer.FileExplorer.load_files", fake_load)
+    monkeypatch.setattr(
+        "src.components.file_tree_viewer.FileExplorer.load_files", fake_load
+    )
 
     # Replace ConnectionForm with a fake that immediately calls the callback
     from PySide6.QtWidgets import QWidget, QComboBox
@@ -264,7 +272,8 @@ def test_config_dialog_connected_flow(monkeypatch, qtbot, tmp_path):
     qtbot.addWidget(w)
     w.open_config_dialog()
 
-    assert w.location_display.text() == "https://cloud/"
+    # Cloud shows root path when base URL has no user/path segment
+    assert w.location_display.text() == "/"
     assert called["loaded"] is True
 
 

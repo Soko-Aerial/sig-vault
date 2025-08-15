@@ -2,7 +2,7 @@ class Icons:
     cloud = "\ue753"
     add = "\ue710"
     camera = "\ue722"
-    favorite_star = "\ue734"
+    star = "\ue734"
     menu = "\ue700"
     search = "\ue721"
     home = "\ue80f"

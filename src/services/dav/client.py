@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import List, Dict, Any, cast
 from webdav3.client import Client
 import concurrent.futures
@@ -55,6 +56,9 @@ class OwnCloudWebDAVClient:
                 "verify": verify,
             }
         )
+        # Initialize a default logger if none provided
+        if self.logger is None:
+            self.logger = logging.getLogger(__name__)
 
     # -------- helpers --------
     def _ensure_dir(self, path: str) -> str:
@@ -92,19 +96,28 @@ class OwnCloudWebDAVClient:
         except Exception as e:
             if self.logger:
                 self.logger.error(f"WebDAV list failed: {e}")
-            else:
-                print(f"WebDAV list failed: {e}")
             self._raise_mapped("list directory", e)
         # Build base results first (cheap)
         results: List[Dict[str, Any]] = []
         info_indices: Dict[str, int] = {}
-        for name in entries:
-            if name in ("", remote_dir.strip("/")):
+        current_norm = remote_dir.strip("/")
+        for raw in entries:
+            if not raw:
                 continue
-            full = remote_dir + name if not name.startswith(remote_dir) else name
+            name_raw = str(raw)
+            # Normalize both for comparison and display
+            name_norm = name_raw.strip("/")
+            # Skip the current directory if the backend returns it in the listing
+            if name_norm == current_norm:
+                continue
+            full = (
+                remote_dir + name_raw
+                if not name_raw.startswith(remote_dir)
+                else name_raw
+            )
             is_dir = full.endswith("/")
             entry = {
-                "name": name.rstrip("/"),
+                "name": name_norm,
                 "remote_path": full,
                 "is_dir": is_dir,
                 "size": None,

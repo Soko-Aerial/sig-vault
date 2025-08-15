@@ -56,7 +56,7 @@ def _dav_backend() -> StorageBackend:
 
     class DAVBackend:
         def _client(self, session_info: Dict[str, str]) -> OwnCloudWebDAVClient:
-            base = session_info.get("server", "")  # Using 'server' to store base URL
+            base = session_info.get("server", "")
             user = session_info.get("username", "")
             pwd = session_info.get("password", "")
             return OwnCloudWebDAVClient(base_url=base, username=user, password=pwd)
