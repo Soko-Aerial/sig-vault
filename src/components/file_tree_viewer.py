@@ -100,6 +100,7 @@ class FileExplorer(QWidget):
         self._use_async: bool = bool(async_load)
         self._loader_thread: QThread | None = None
         self._loader_worker: _LoaderWorker | None = None
+        self._ever_loaded_ok: bool = False
         self.init_ui()
 
     def init_ui(self) -> None:
@@ -230,15 +231,17 @@ class FileExplorer(QWidget):
         user = (s.get("username") or "").strip()
         pwd = (s.get("password") or "").strip()
         if not user or not pwd:
-            self.file_tree.clear()
-            self._update_status()
-            self.status_label.setText("Not connected")
-            return False
-        if storage != "cloud":
-            if not (s.get("server") and s.get("share")):
+            if not self._ever_loaded_ok:
                 self.file_tree.clear()
                 self._update_status()
                 self.status_label.setText("Not connected")
+            return False
+        if storage != "cloud":
+            if not (s.get("server") and s.get("share")):
+                if not self._ever_loaded_ok:
+                    self.file_tree.clear()
+                    self._update_status()
+                    self.status_label.setText("Not connected")
                 return False
 
         if self._loading:
@@ -268,6 +271,8 @@ class FileExplorer(QWidget):
             self._root_handle = root
             self.file_tree.clear()
             self._populate_files(files)
+            self._ever_loaded_ok = True
+            self._ever_loaded_ok = True
         finally:
             self._show_loading(False)
 
@@ -290,15 +295,17 @@ class FileExplorer(QWidget):
             pwd = (s.get("password") or "").strip()
             if not user or not pwd:
                 # Treat as not connected yet
-                self.file_tree.clear()
-                self._update_status()
-                self.status_label.setText("Not connected")
-                return False
-            if storage != "cloud":
-                if not (s.get("server") and s.get("share")):
+                if not self._ever_loaded_ok:
                     self.file_tree.clear()
                     self._update_status()
                     self.status_label.setText("Not connected")
+                return False
+            if storage != "cloud":
+                if not (s.get("server") and s.get("share")):
+                    if not self._ever_loaded_ok:
+                        self.file_tree.clear()
+                        self._update_status()
+                        self.status_label.setText("Not connected")
                     return False
             root, files = self._fetch_files()
             # Save handle for optional metadata lookups

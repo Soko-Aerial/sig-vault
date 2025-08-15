@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget, QWidget
 from src.components.explorer import Explorer
+from PySide6.QtGui import QFont
 
 
 class MainWindow(QMainWindow):
@@ -8,6 +9,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Sig/Vault")
         self.setCentralWidget(QWidget())
+
+        font = QFont()
+        font.setPixelSize(13)
+        app.setFont(font)
 
         explorer_dock = QDockWidget("Explorer", self)
         explorer_dock.setObjectName("ExplorerDock")
